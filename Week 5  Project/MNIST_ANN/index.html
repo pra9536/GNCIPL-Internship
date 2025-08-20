@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNIST Digit Recognizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .canvas-container {
+            touch-action: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 flex items-center justify-center min-h-screen">
+
+    <div class="w-full max-w-md mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 md:p-8">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800 dark:text-white">Handwritten Digit Recognizer</h1>
+            <p class="text-gray-500 dark:text-gray-400 mt-2">Draw a digit from 0 to 9 in the box below.</p>
+        </div>
+
+        <div class="canvas-container w-full h-64 md:h-80 bg-gray-200 dark:bg-gray-700 rounded-xl cursor-crosshair overflow-hidden mx-auto shadow-inner">
+            <canvas id="main-canvas" class="w-full h-full"></canvas>
+        </div>
+        
+        <canvas id="hidden-canvas" width="28" height="28" style="display: none;"></canvas>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mt-6">
+            <button id="predict-btn" class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-indigo-300 dark:focus:ring-indigo-800">
+                Predict
+            </button>
+            <button id="clear-btn" class="w-full sm:w-auto bg-gray-300 hover:bg-gray-400 text-gray-800 dark:bg-gray-600 dark:hover:bg-gray-500 dark:text-white font-semibold py-3 px-6 rounded-lg transition-transform transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-200 dark:focus:ring-gray-700">
+                Clear
+            </button>
+        </div>
+
+        <div id="result-container" class="text-center mt-8 p-6 bg-gray-50 dark:bg-gray-700 rounded-xl hidden">
+            <h2 class="text-xl font-semibold text-gray-800 dark:text-white mb-2">Prediction</h2>
+            <p id="prediction-text" class="text-5xl font-bold text-indigo-500 dark:text-indigo-400">7</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const mainCanvas = document.getElementById('main-canvas');
+            const hiddenCanvas = document.getElementById('hidden-canvas');
+            const predictBtn = document.getElementById('predict-btn');
+            const clearBtn = document.getElementById('clear-btn');
+            const resultContainer = document.getElementById('result-container');
+            const predictionText = document.getElementById('prediction-text');
+
+            const mainCtx = mainCanvas.getContext('2d');
+            const hiddenCtx = hiddenCanvas.getContext('2d');
+
+            let isDrawing = false;
+            let lastX = 0;
+            let lastY = 0;
+
+            // Set canvas dimensions based on container size
+            function resizeCanvas() {
+                const rect = mainCanvas.parentElement.getBoundingClientRect();
+                mainCanvas.width = rect.width;
+                mainCanvas.height = rect.height;
+                mainCtx.strokeStyle = '#FFFFFF'; // White color for drawing on dark canvas
+                mainCtx.lineWidth = Math.max(12, mainCanvas.width * 0.08);
+                mainCtx.lineJoin = 'round';
+                mainCtx.lineCap = 'round';
+            }
+
+            window.addEventListener('resize', resizeCanvas);
+            resizeCanvas();
+
+
+            function getMousePos(canvas, evt) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: evt.clientX - rect.left,
+                    y: evt.clientY - rect.top
+                };
+            }
+            
+            function getTouchPos(canvas, evt) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: evt.touches[0].clientX - rect.left,
+                    y: evt.touches[0].clientY - rect.top
+                };
+            }
+
+            function startDrawing(e) {
+                isDrawing = true;
+                let pos;
+                if (e.touches) {
+                    pos = getTouchPos(mainCanvas, e);
+                } else {
+                    pos = getMousePos(mainCanvas, e);
+                }
+                [lastX, lastY] = [pos.x, pos.y];
+            }
+
+            function draw(e) {
+                if (!isDrawing) return;
+                e.preventDefault();
+                let pos;
+                 if (e.touches) {
+                    pos = getTouchPos(mainCanvas, e);
+                } else {
+                    pos = getMousePos(mainCanvas, e);
+                }
+
+                mainCtx.beginPath();
+                mainCtx.moveTo(lastX, lastY);
+                mainCtx.lineTo(pos.x, pos.y);
+                mainCtx.stroke();
+                [lastX, lastY] = [pos.x, pos.y];
+            }
+
+            function stopDrawing() {
+                isDrawing = false;
+            }
+
+            // Mouse events
+            mainCanvas.addEventListener('mousedown', startDrawing);
+            mainCanvas.addEventListener('mousemove', draw);
+            mainCanvas.addEventListener('mouseup', stopDrawing);
+            mainCanvas.addEventListener('mouseout', stopDrawing);
+
+            // Touch events
+            mainCanvas.addEventListener('touchstart', startDrawing);
+            mainCanvas.addEventListener('touchmove', draw);
+            mainCanvas.addEventListener('touchend', stopDrawing);
+
+
+            clearBtn.addEventListener('click', () => {
+                mainCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+                resultContainer.classList.add('hidden');
+            });
+
+            predictBtn.addEventListener('click', async () => {
+                // 1. Preprocess the image
+                hiddenCtx.clearRect(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                hiddenCtx.drawImage(mainCanvas, 0, 0, hiddenCanvas.width, hiddenCanvas.height);
+
+                const imageData = hiddenCtx.getImageData(0, 0, hiddenCanvas.width, hiddenCanvas.height);
+                const data = imageData.data;
+                
+                const input = [];
+                for (let i = 0; i < data.length; i += 4) {
+                    input.push(data[i + 3] / 255.0);
+                }
+
+                // 2. Make a "prediction"
+                // In a real application, you would send `input` to your backend API.
+                // This is a placeholder that shows a random number.
+                const simulatedPrediction = Math.floor(Math.random() * 10);
+                predictionText.textContent = simulatedPrediction;
+                resultContainer.classList.remove('hidden');
+            });
+        });
+    </script>
+</body>
+</html>

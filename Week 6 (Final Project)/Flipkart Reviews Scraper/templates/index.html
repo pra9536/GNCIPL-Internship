@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flipkart Reviews Scraper</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="container">
+    <h1>Flipkart Reviews Scraper</h1>
+    <p class="muted">Enter a Flipkart product URL and (optionally) your cookie. Click "Scrape Reviews".</p>
+
+    <form id="scrape-form">
+      <label>Product URL</label>
+      <input id="product_url" type="url" placeholder="https://www.flipkart.com/.../p/..." required />
+
+      <label>Cookie (optional but often required by Flipkart)</label>
+      <textarea id="cookie" placeholder="Paste your browser cookie string here"></textarea>
+
+      <div class="row">
+        <div class="col">
+          <label>Pages</label>
+          <input id="pages" type="number" min="1" max="20" value="5" />
+        </div>
+        <div class="col switch">
+          <label><input id="use_proxy" type="checkbox" /> Use Webshare Proxy</label>
+        </div>
+      </div>
+
+      <div id="proxy-fields" class="hidden">
+        <div class="row">
+          <div class="col">
+            <label>Proxy Username</label>
+            <input id="proxy_username" placeholder="e.g. pnenhgpj" />
+          </div>
+          <div class="col">
+            <label>Proxy Password</label>
+            <input id="proxy_password" placeholder="••••••••" />
+          </div>
+        </div>
+      </div>
+
+      <button type="submit">Scrape Reviews</button>
+    </form>
+
+    <div id="status"></div>
+
+    <div id="results" class="hidden">
+      <div class="toolbar">
+        <a class="btn" href="/download">Download CSV</a>
+        <span id="rowcount"></span>
+      </div>
+      <table id="table">
+        <thead>
+          <tr><th>#</th><th>Rating</th><th>Comment</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('scrape-form');
+    const statusEl = document.getElementById('status');
+    const results = document.getElementById('results');
+    const tbody = document.querySelector('#table tbody');
+    const rowcount = document.getElementById('rowcount');
+    const useProxy = document.getElementById('use_proxy');
+    const proxyFields = document.getElementById('proxy-fields');
+
+    useProxy.addEventListener('change', () => {
+      proxyFields.classList.toggle('hidden', !useProxy.checked);
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      results.classList.add('hidden');
+      tbody.innerHTML = '';
+      rowcount.textContent = '';
+      statusEl.textContent = 'Scraping...';
+
+      const payload = {
+        product_url: document.getElementById('product_url').value,
+        cookie: document.getElementById('cookie').value,
+        pages: document.getElementById('pages').value,
+        use_proxy: document.getElementById('use_proxy').checked,
+        proxy_username: document.getElementById('proxy_username').value,
+        proxy_password: document.getElementById('proxy_password').value,
+      };
+
+      try {
+        const res = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!data.ok) {
+          statusEl.textContent = 'Error: ' + (data.error || 'Something went wrong');
+          return;
+        }
+        statusEl.textContent = 'Success!';
+        results.classList.remove('hidden');
+        rowcount.textContent = `Total rows saved: ${data.count}`;
+
+        data.preview.forEach((row, idx) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${idx + 1}</td><td>${row.score || ''}</td><td>${row.text || ''}</td>`;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        statusEl.textContent = 'Network error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
